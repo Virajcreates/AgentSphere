@@ -1,5 +1,25 @@
 from dependency_injector import containers, providers
 
+from agentsphere.ai.core.inference import AIInferenceService
+from agentsphere.ai.cost.cost_tracker import CostTracker
+from agentsphere.ai.executor.executor import MockExecutor
+from agentsphere.ai.gateway.ai_gateway import AIGateway
+from agentsphere.ai.gateway.circuit_breaker import CircuitBreaker
+from agentsphere.ai.gateway.retry_policy import RetryPolicy
+from agentsphere.ai.memory.memory import MockConversationMemory, MockMemoryStore
+from agentsphere.ai.planner.planner import MockPlanner
+from agentsphere.ai.prompts.prompt_manager import PromptManager
+from agentsphere.ai.providers.anthropic import AnthropicProvider
+from agentsphere.ai.providers.azure_openai import AzureOpenAIProvider
+from agentsphere.ai.providers.gemini import GeminiProvider
+from agentsphere.ai.providers.groq import GroqProvider
+from agentsphere.ai.providers.nvidia import NvidiaProvider
+from agentsphere.ai.providers.ollama import OllamaProvider
+from agentsphere.ai.providers.openai import OpenAIProvider
+from agentsphere.ai.providers.openrouter import OpenRouterProvider
+from agentsphere.ai.registry.model_registry import ModelRegistry
+from agentsphere.ai.telemetry.tracker import TelemetryTracker
+from agentsphere.ai.tokenizer.token_counter import TokenCounter
 from agentsphere.application.use_cases.auth.create_api_key import CreateApiKeyUseCase
 from agentsphere.application.use_cases.auth.login import LoginUseCase
 from agentsphere.application.use_cases.auth.refresh_token import RefreshTokenUseCase
@@ -79,10 +99,73 @@ class UseCasesContainer(containers.DeclarativeContainer):
     )
 
 
+class AIContainer(containers.DeclarativeContainer):
+    model_registry = providers.Singleton(ModelRegistry)
+    prompt_manager = providers.Singleton(PromptManager)
+    token_counter = providers.Singleton(TokenCounter)
+    cost_tracker = providers.Singleton(CostTracker, model_registry=model_registry)
+    telemetry_tracker = providers.Singleton(TelemetryTracker)
+    circuit_breaker = providers.Singleton(CircuitBreaker)
+    retry_policy = providers.Singleton(RetryPolicy)
+
+    # Providers (as factories)
+    openai_provider = providers.Factory(OpenAIProvider)
+    gemini_provider = providers.Factory(GeminiProvider)
+    anthropic_provider = providers.Factory(AnthropicProvider)
+    openrouter_provider = providers.Factory(OpenRouterProvider)
+    groq_provider = providers.Factory(GroqProvider)
+    azure_openai_provider = providers.Factory(AzureOpenAIProvider)
+    ollama_provider = providers.Factory(OllamaProvider)
+    nvidia_provider = providers.Factory(NvidiaProvider)
+
+    # Placeholders
+    planner = providers.Singleton(MockPlanner)
+    executor = providers.Singleton(MockExecutor)
+    memory_store = providers.Singleton(MockMemoryStore)
+    conversation_memory = providers.Singleton(MockConversationMemory)
+
+    # Gateway
+    gateway = providers.Singleton(
+        AIGateway,
+        model_registry=model_registry,
+        circuit_breaker=circuit_breaker,
+        retry_policy=retry_policy,
+        telemetry_tracker=telemetry_tracker,
+        cost_tracker=cost_tracker,
+        llm_providers=providers.Dict(
+            openai=openai_provider,
+            gemini=gemini_provider,
+            anthropic=anthropic_provider,
+            openrouter=openrouter_provider,
+            groq=groq_provider,
+            azure_openai=azure_openai_provider,
+            ollama=ollama_provider,
+            nvidia=nvidia_provider,
+        ),
+        embedding_providers=providers.Dict(
+            openai=openai_provider,
+            gemini=gemini_provider,
+            azure_openai=azure_openai_provider,
+            ollama=ollama_provider,
+            nvidia=nvidia_provider,
+        ),
+    )
+
+    # Inference Service
+    inference = providers.Singleton(
+        AIInferenceService,
+        prompt_manager=prompt_manager,
+        gateway=gateway,
+        model_registry=model_registry,
+        token_counter=token_counter,
+    )
+
+
 class ApplicationContainer(containers.DeclarativeContainer):
     core = providers.Container(CoreContainer)
     auth = providers.Container(AuthContainer, core=core)
     use_cases = providers.Container(UseCasesContainer, core=core, auth=auth)
+    ai = providers.Container(AIContainer)
 
 
 _container: ApplicationContainer | None = None
