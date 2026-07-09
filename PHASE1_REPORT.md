@@ -183,7 +183,7 @@ src/agentsphere/
 |------|---------|--------|
 | **Ruff** | Linting (E, F, I, N, W, UP, B, SIM, PT, RUF) | ✅ Pass (0 errors) |
 | **Mypy** | Type checking (`--strict`, 81 files) | ✅ Pass (0 errors) |
-| **Pytest** | 39 tests (36 unit/integration + 3 architecture) | ✅ Pass (2 DB-dependent skipped) |
+| **Pytest** | 51 tests (36 unit/integration + 3 architecture + 12 container wiring) | ✅ Pass (2 DB-dependent skipped) |
 | **Coverage** | 60% (threshold 60%, DB-requiring paths excluded) | ✅ Pass |
 | **Bandit** | Security scan — 4 expected findings (dev only) | ✅ Pass |
 | **pip-audit** | Dependency vulnerability check (0 known) | ✅ Pass |
@@ -202,12 +202,12 @@ Ruff → Mypy → Pytest (unit + coverage + architecture) → Bandit → pip-aud
 
 | Rule | Test | Status |
 |------|------|--------|
-| Domain must not depend on Infrastructure or Interfaces | `test_domain_does_not_depend_on_infrastructure` | ✅ Pass |
-| Application must not depend on Interfaces/API layer | `test_application_does_not_depend_on_interfaces` | ✅ Pass |
+| Domain must not depend on Infrastructure or Interfaces | `test_domain_does_not_depend_on_infrastructure_or_interfaces` | ✅ Pass |
+| Application must not depend on Interfaces or Infrastructure | `test_application_does_not_depend_on_interfaces_or_infrastructure` | ✅ Pass |
 | Infrastructure must not depend on API layer | `test_infrastructure_does_not_depend_on_api_layer` | ✅ Pass |
 
 Note: Cross-cutting layers (`common`, `config`) are allowed for all layers.
-Known exceptions: Application use cases import repository implementations directly (6 files) — accepted for Phase 1 pragmatism.
+All layers fully satisfy Clean Architecture rules — no known violations.
 
 ---
 
@@ -231,16 +231,16 @@ services:
 - No file storage / document ingestion
 - No billing / usage tracking
 - Integration tests require running PostgreSQL (marked `@pytest.mark.needs_db`)
-- Application layer imports from Infrastructure (use cases create repository instances directly) — a Phase 2 improvement would invert this via repository factories or DI
 
 ---
 
 ## Test Summary
 
 ```
-39 passed, 2 deselected (needs_db) in 34.20s
+51 passed, 2 deselected (needs_db) in 30.12s
 Coverage: 60.11% (threshold: 60%)
-Architecture: 3/3 tests pass
+Architecture: 3/3 tests pass (0 known violations)
+Container wiring: 12/12 tests pass
 Ruff: 0 errors
 Mypy: 0 errors in 81 source files
 Bandit: 4 findings (all expected for dev)
