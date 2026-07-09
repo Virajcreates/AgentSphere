@@ -19,10 +19,17 @@ from agentsphere.interfaces.api.middleware.rate_limit import RateLimitMiddleware
 from agentsphere.interfaces.api.middleware.request_context import RequestContextMiddleware
 from agentsphere.interfaces.api.middleware.tenant import TenantMiddleware
 from agentsphere.interfaces.api.middleware.version_header import VersionHeaderMiddleware
+from agentsphere.interfaces.api.routes.agents import router as agents_router
+from agentsphere.interfaces.api.routes.analytics import router as analytics_router
 from agentsphere.interfaces.api.routes.auth import auth_router
+from agentsphere.interfaces.api.routes.benchmarks import router as benchmarks_router
+from agentsphere.interfaces.api.routes.chunks import router as chunks_router
 from agentsphere.interfaces.api.routes.conversations import router as conversations_router
 from agentsphere.interfaces.api.routes.health import health_router
 from agentsphere.interfaces.api.routes.knowledge import router as knowledge_router
+from agentsphere.interfaces.api.routes.prompts import router as prompts_router
+from agentsphere.interfaces.api.routes.replay import router as replay_router
+from agentsphere.interfaces.api.routes.search import router as search_router
 from agentsphere.interfaces.api.routes.tenants import tenant_router
 from agentsphere.interfaces.api.routes.version import version_router
 from agentsphere.interfaces.container import init_container
@@ -147,6 +154,13 @@ def create_app() -> FastAPI:
     app.include_router(tenant_router, prefix="/api/v1/tenants", tags=["Tenants"])
     app.include_router(conversations_router)
     app.include_router(knowledge_router)
+    app.include_router(agents_router)
+    app.include_router(prompts_router)
+    app.include_router(benchmarks_router)
+    app.include_router(analytics_router)
+    app.include_router(replay_router)
+    app.include_router(chunks_router)
+    app.include_router(search_router)
 
     return app
 
