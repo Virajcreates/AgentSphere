@@ -136,4 +136,3 @@ export default function PlaygroundPage() {
     </ErrorBoundary>
   );
 }
-export default PlaygroundPage;

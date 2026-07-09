@@ -134,4 +134,3 @@ export default function DashboardPage() {
     </ErrorBoundary>
   );
 }
-export default DashboardPage;

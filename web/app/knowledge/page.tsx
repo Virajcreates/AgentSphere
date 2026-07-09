@@ -169,4 +169,3 @@ export default function KnowledgePage() {
     </ErrorBoundary>
   );
 }
-export default KnowledgePage;

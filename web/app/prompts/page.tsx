@@ -72,4 +72,3 @@ export default function PromptStudioPage() {
     </ErrorBoundary>
   );
 }
-export default PromptStudioPage;

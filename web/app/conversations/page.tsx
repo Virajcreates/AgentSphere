@@ -179,4 +179,3 @@ export default function ConversationsPage() {
     </ErrorBoundary>
   );
 }
-export default ConversationsPage;
