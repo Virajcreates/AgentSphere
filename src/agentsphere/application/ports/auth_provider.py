@@ -1,0 +1,16 @@
+from typing import Any, Protocol
+from uuid import UUID
+
+
+class AuthProvider(Protocol):
+    async def authenticate(self, token: str) -> dict[str, Any] | None: ...
+
+    async def create_access_token(
+        self, user_id: UUID, tenant_id: UUID, role: str, permissions: list[str]
+    ) -> str: ...
+
+    async def create_refresh_token(self, user_id: UUID, tenant_id: UUID) -> str: ...
+
+    async def refresh_access_token(self, refresh_token: str) -> tuple[str, str] | None: ...
+
+    async def revoke_token(self, token: str) -> None: ...
