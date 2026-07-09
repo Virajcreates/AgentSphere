@@ -27,6 +27,11 @@ from agentsphere.ai.telemetry.benchmarking import ProviderBenchmarkCollector
 from agentsphere.ai.telemetry.lineage import PromptLineageTracker
 from agentsphere.ai.telemetry.tracker import TelemetryTracker
 from agentsphere.ai.tokenizer.token_counter import TokenCounter
+from agentsphere.application.services.conversation_service import ConversationService
+from agentsphere.application.services.embedding_service import EmbeddingService
+from agentsphere.application.services.knowledge_service import KnowledgeService
+from agentsphere.application.services.retriever_service import RetrieverService
+from agentsphere.application.services.summarization_service import SummarizationService
 from agentsphere.application.use_cases.auth.create_api_key import CreateApiKeyUseCase
 from agentsphere.application.use_cases.auth.login import LoginUseCase
 from agentsphere.application.use_cases.auth.refresh_token import RefreshTokenUseCase
@@ -42,8 +47,17 @@ from agentsphere.infrastructure.auth.jwt_handler import JWTHandler
 from agentsphere.infrastructure.auth.password_hasher import PasswordHasher
 from agentsphere.infrastructure.event_bus.in_memory_event_bus import InMemoryEventBus
 from agentsphere.infrastructure.persistence.repositories.api_key_repository import ApiKeyRepository
+from agentsphere.infrastructure.persistence.repositories.conversation_repository import (
+    ConversationRepository,
+)
+from agentsphere.infrastructure.persistence.repositories.knowledge_repository import (
+    KnowledgeRepository,
+)
 from agentsphere.infrastructure.persistence.repositories.tenant_repository import TenantRepository
 from agentsphere.infrastructure.persistence.repositories.user_repository import UserRepository
+from agentsphere.infrastructure.rag.parsing.document_parser import DocumentParser
+from agentsphere.interfaces.adapters.langgraph.adapter import LangGraphAdapter
+from agentsphere.interfaces.adapters.langgraph.nodes import LangGraphNodes
 from agentsphere.runtime.agent.agent_runtime import AgentRuntime
 from agentsphere.runtime.checkpoint.in_memory_store import InMemoryCheckpointStore
 from agentsphere.runtime.conversation.conversation_manager import ConversationManager
@@ -198,10 +212,15 @@ class AIContainer(containers.DeclarativeContainer):
 
 
 class RuntimeContainer(containers.DeclarativeContainer):
+    core = providers.DependenciesContainer()
     ai = providers.DependenciesContainer()
 
     # Core event bus shared across components
     event_bus = providers.Singleton(InMemoryEventBus)
+
+    # Core repositories
+    conversation_repo_factory = providers.Factory(ConversationRepository)
+    knowledge_repo_factory = providers.Factory(KnowledgeRepository)
 
     # Core singletons
     conversation_manager = providers.Singleton(ConversationManager, event_bus=event_bus)
@@ -214,6 +233,47 @@ class RuntimeContainer(containers.DeclarativeContainer):
     tracker = providers.Singleton(RuntimeTracker)
     serializer = providers.Singleton(RuntimeSerializer)
     checkpoint_store = providers.Singleton(InMemoryCheckpointStore)
+
+    # Document Pipeline
+    document_parser = providers.Singleton(DocumentParser)
+
+    # Core Public Services (Encapsulating subsystems as per structural requirements)
+    embedding_service = providers.Singleton(EmbeddingService, gateway=ai.gateway)
+    summarization_service = providers.Singleton(SummarizationService, gateway=ai.gateway)
+    retriever_service = providers.Singleton(
+        RetrieverService,
+        db=core.db,
+        knowledge_repo_factory=knowledge_repo_factory,
+        embedding_service=embedding_service,
+        event_bus=event_bus,
+    )
+    conversation_service = providers.Singleton(
+        ConversationService,
+        db=core.db,
+        conversation_repo_factory=conversation_repo_factory,
+        summarization_service=summarization_service,
+        event_bus=event_bus,
+    )
+    knowledge_service = providers.Singleton(
+        KnowledgeService,
+        db=core.db,
+        knowledge_repo_factory=knowledge_repo_factory,
+        embedding_service=embedding_service,
+        document_parser=document_parser,
+    )
+
+    # LangGraph Adapters
+    langgraph_nodes = providers.Singleton(
+        LangGraphNodes,
+        inference_service=ai.inference,
+        retriever_service=retriever_service,
+        tool_executor=tool_executor,
+        memory_manager=memory_manager,
+    )
+    langgraph_adapter = providers.Singleton(
+        LangGraphAdapter,
+        nodes=langgraph_nodes,
+    )
 
     # Core Agent Runtime Orchestrator
     agent_runtime = providers.Singleton(
@@ -236,7 +296,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     auth = providers.Container(AuthContainer, core=core)
     use_cases = providers.Container(UseCasesContainer, core=core, auth=auth)
     ai = providers.Container(AIContainer)
-    runtime = providers.Container(RuntimeContainer, ai=ai)
+    runtime = providers.Container(RuntimeContainer, ai=ai, core=core)
 
 
 _container: ApplicationContainer | None = None

@@ -6,6 +6,8 @@ from sqlalchemy import engine_from_config, pool
 from agentsphere.config.database import Base
 from agentsphere.config.settings import Settings
 
+# Explicitly import all models to ensure they are registered with Base.metadata before migrating
+
 config = context.config
 
 if config.config_file_name is not None:

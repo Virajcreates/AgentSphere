@@ -20,7 +20,9 @@ from agentsphere.interfaces.api.middleware.request_context import RequestContext
 from agentsphere.interfaces.api.middleware.tenant import TenantMiddleware
 from agentsphere.interfaces.api.middleware.version_header import VersionHeaderMiddleware
 from agentsphere.interfaces.api.routes.auth import auth_router
+from agentsphere.interfaces.api.routes.conversations import router as conversations_router
 from agentsphere.interfaces.api.routes.health import health_router
+from agentsphere.interfaces.api.routes.knowledge import router as knowledge_router
 from agentsphere.interfaces.api.routes.tenants import tenant_router
 from agentsphere.interfaces.api.routes.version import version_router
 from agentsphere.interfaces.container import init_container
@@ -143,6 +145,8 @@ def create_app() -> FastAPI:
     app.include_router(version_router, prefix="", tags=["Version"])
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
     app.include_router(tenant_router, prefix="/api/v1/tenants", tags=["Tenants"])
+    app.include_router(conversations_router)
+    app.include_router(knowledge_router)
 
     return app
 
