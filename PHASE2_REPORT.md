@@ -1,29 +1,33 @@
-# AgentSphere Phase 2 — AI Platform Foundation
+# AgentSphere Phase 2 & 2.1 — AI Platform Foundation and Refinements
 
 ## Overview
 
-Phase 2 delivers the complete, reusable **AI Platform Foundation** (`agentsphere.ai`) inside AgentSphere. This foundation decouples the high-level application layer from vendor-specific SDKs and serves as a highly robust, multi-tenant orchestration engine for all subsequent conversational and agent workflows.
+Phase 2 and 2.1 deliver the complete, production-grade **AI Platform Foundation and Refinements** (`agentsphere.ai`) inside AgentSphere. This unified platform decouples the high-level application layers from vendor-specific SDKs and implements enterprise-level intelligent routing, safety moderation, multi-tenant templates compilation, sliding-window quotas, similarity-overlap caching, operational metrics benchmarking, and auditable lineage tracing.
 
-Architecture is frozen per `v1.1`. Stack: **FastAPI + dependency-injector + Prometheus + contextlib + Pydantic (v2)**.
+Architecture is frozen per `v1.1`. Stack: **FastAPI + dependency-injector + Prometheus + contextlib + Pydantic (v2) + Async-first**.
 
 ---
 
 ## Folder Tree
 
-The newly introduced components are located under `src/agentsphere/ai/`:
+The AI Platform components reside completely under `src/agentsphere/ai/`:
 
 ```
 src/agentsphere/ai/
 ├── __init__.py
 ├── core/
 │   ├── __init__.py
-│   └── inference.py             # AIInferenceService & JSON Self-Repair Loop
+│   ├── inference.py             # AIInferenceService & Repair Loop Coordinator
+│   ├── policy_engine.py         # AIPolicyEngine (Allowed lists, token caps, safety)
+│   └── semantic_cache.py        # Jaccard string similarity Token-Overlap AICache
 ├── cost/
 │   ├── __init__.py
-│   └── cost_tracker.py          # Cost Calculation Engine (Completion & Embed)
+│   ├── cost_tracker.py          # Cost Calculation Engine (Completion & Embed)
+│   └── quota_manager.py         # UsageQuota & QuotaManager sliding limits
 ├── exceptions/
 │   ├── __init__.py
-│   └── base.py                  # Custom AI platform exceptions
+│   ├── base.py                  # Custom AI platform exceptions
+│   └── refinement_exceptions.py # Custom Policy, Quota, Compiler, and Negotiation exceptions
 ├── executor/
 │   ├── __init__.py
 │   └── executor.py              # Mock tool execution engine placeholder
@@ -34,6 +38,7 @@ src/agentsphere/ai/
 │   └── retry_policy.py          # Jittered Exponential Backoff policy
 ├── interfaces/
 │   ├── __init__.py
+│   ├── cache.py                 # AICache Protocol contract
 │   ├── executor.py              # Tool executor interface
 │   ├── memory.py                # Memory state interfaces
 │   ├── planner.py               # Orchestration planner interface
@@ -46,7 +51,8 @@ src/agentsphere/ai/
 │   └── planner.py               # Plan generator mock
 ├── prompts/
 │   ├── __init__.py
-│   └── prompt_manager.py        # Multi-tenant custom template rendering
+│   ├── prompt_compiler.py       # PromptCompiler (recursive includes, caching, macros)
+│   └── prompt_manager.py        # Multi-tenant template rendering
 ├── providers/
 │   ├── __init__.py
 │   ├── anthropic.py             # Anthropic Adapter
@@ -60,6 +66,7 @@ src/agentsphere/ai/
 │   └── openrouter.py            # OpenRouter Adapter
 ├── registry/
 │   ├── __init__.py
+│   ├── capability_negotiator.py # CapabilityNegotiator model matching engine
 │   └── model_registry.py        # Features, pricing, and health registry
 ├── schemas/
 │   ├── __init__.py
@@ -71,6 +78,8 @@ src/agentsphere/ai/
 │   └── stream.py                # Stream normalizer & Telemetry callback accumulator
 ├── telemetry/
 │   ├── __init__.py
+│   ├── benchmarking.py          # ProviderBenchmarkCollector operational analyst
+│   ├── lineage.py               # PromptLineageTracker event audit logger
 │   └── tracker.py               # Prometheus metrics dispatcher
 └── tokenizer/
     ├── __init__.py
@@ -83,14 +92,16 @@ src/agentsphere/ai/
 
 | Component | Responsibility / Design Choice |
 | :--- | :--- |
-| **Provider Routing** | `AIGateway` maps completion/embedding requests to registered provider adapters using the primary vendor defined in the `ModelRegistry` model metadata. |
-| **Resiliency Gateway** | Wraps provider calls inside sequential failover chains, applying stateful in-memory **Circuit Breakers** and **Jittered Exponential Backoff** retries for transient connection/rate-limit exceptions. |
-| **Prompt Manager** | Provides strict template variable validation (checks missing placeholders, unclosed curly braces, etc.) and supports first-match **tenant-specific template overrides**. |
-| **Model Registry** | Centralizes pricing coefficients, dynamic Average Latencies (calculated via live request Exponential Moving Averages), and granular model capabilities flags. |
-| **JSON Structured Outputs** | Under the `AIInferenceService`, if a request declares a Pydantic `response_format` model, the engine validates the response content and runs a recursive **self-repair validation loop** (up to 2 retry repair calls) on failures. |
-| **Streaming Abstraction** | The `AIStream` wrapper normalizes disparate stream chunks into a standard `LLMStreamChunk` output and invokes an `on_complete` callback to log latency, accrued tokens, and cost. |
-| **Token accounting** | Exposes a pluggable tokenizer registry in `TokenCounter` with a robust combined word-count and character fallback estimation model. |
-| **Dependency Injection** | The `AIContainer` registers all gateway, inference, mock providers, trackers, and registry singletons dynamically within `ApplicationContainer` in `src/agentsphere/interfaces/container.py`. |
+| **Capability Negotiator** | Instead of hardcoded strings, users request capability maps (e.g. `{"vision": True, "json_output": True}`). The negotiator dynamic-filters matching models and selects the optimum choice using sorting strategies (`lowest_cost`, `lowest_latency`). |
+| **Prompt Compiler** | Resolves nested imports and includes (`{{ include "common.header" }}`) recursively, processes run-time dynamic macros (`{{ current_date }}`, `{{ current_year }}`), validates variables, and stores results inside a local compilation cache. |
+| **Policy Engine** | Validates requests against system budgets ($10.00 max limit), strict whitelist providers/models, max allowable request token limits, and a safety content-moderation layer scanning for malicious keyphrases. |
+| **Quota Manager** | Keeps transaction records inside an in-memory sliding window, validating tenant and provider expenditures against configured daily and monthly cost allowances. |
+| **Semantic Cache** | Introduces Jaccard Token-Overlap string similarity matching. Prompts matching with >= 85% overlap result in instant semantic hits, reducing latency and provider costs while maintaining multi-tenant isolation. |
+| **Provider Benchmarking**| Automatically aggregates attempts across successful, failed, retried, and timed-out executions per-provider to build latency averages and availability rates. |
+| **Prompt Lineage** | Persists a structured audit log of execution records linking prompt name, prompt version, exact input parameters, final rendered body, routed model/provider, latency, and costs. |
+| **Resiliency Gateway** | Coordinates stateful in-memory Circuit Breakers (CLOSED, OPEN, HALF-OPEN states) and Jittered Exponential Backoff retries for transient errors. |
+| **Structured Outputs** | The `AIInferenceService` coordinates recursive validation and self-repair corrections if provider outputs fail to validate against requested Pydantic models. |
+| **Dependency Injection** | All elements are registered declaratively within `AIContainer` inside `src/agentsphere/interfaces/container.py` under the `ApplicationContainer` hierarchy. |
 
 ---
 
@@ -102,22 +113,8 @@ The following models are pre-seeded inside `ModelRegistry` with active pricing a
 *   `anthropic`: `claude-3-5-sonnet-latest` ($3.00/$15.00 per 1M).
 *   `groq`: `llama-3.1-70b-versatile` ($0.59/$0.79 per 1M).
 *   `openrouter`: `meta-llama/llama-3.1-405b` ($1.00/$1.00 per 1M).
-*   `ollama`: `llama3` ($0.00/$0.00 per 1M).
+*   `ollama`: `llama3` ($0.00/$0.00 per 1M - local free).
 *   `nvidia`: `llama-3.1-nemotron-70b` ($0.00/$0.00 per 1M).
-
----
-
-## Architectural Decision Records (ADRs)
-
-We have created eight comprehensive ADR documents under `docs/architecture/` documenting each design pattern:
-1.  **`ADR-033-ai-gateway.md`**: Routing contracts, prioritizations, and standardized payload translation.
-2.  **`ADR-034-provider-registry.md`**: Port-and-Adapter interface boundaries, dynamic DI registrations.
-3.  **`ADR-035-prompt-manager.md`**: System default scoping, tenant templates overriding namespaces.
-4.  **`ADR-036-streaming-architecture.md`**: Async stream generator normalizations and complete callbacks.
-5.  **`ADR-037-circuit-breaker.md`**: CLOSED, OPEN, HALF-OPEN state machines, trip thresholds, and cooling periods.
-6.  **`ADR-038-retry-policy.md`**: Jittered exponential delay formulas, transient error isolation filters.
-7.  **`ADR-039-token-accounting.md`**: Robust character fallback token counting, Prometheus logging pipelines.
-8.  **`ADR-040-model-registry.md`**: Model capability parameters and dynamic Exponential Moving Average tracking.
 
 ---
 
@@ -127,29 +124,26 @@ We have created eight comprehensive ADR documents under `docs/architecture/` doc
 | :--- | :--- | :--- | :--- |
 | **Linting** | `Ruff` | ✅ Passed | `0` errors, `0` warnings in workspace |
 | **Type Checking** | `Mypy --strict` | ✅ Passed | `0` errors across all checked files |
-| **Testing** | `Pytest` | ✅ Passed | `108` passed tests (Phase 1 + Phase 2) |
-| **Code Coverage** | `pytest-cov` | ✅ Passed | **`94.32%`** coverage on the `ai/` folder |
+| **Testing** | `Pytest` | ✅ Passed | `133` passed tests (Phase 1, Phase 2 & Phase 2.1) |
+| **Code Coverage** | `pytest-cov` | ✅ Passed | **`93.28%`** coverage on the full `ai/` folder |
 | **Security Scanning** | `Bandit` | ✅ Passed | `0` high-severity vulnerabilities in core |
-| **Audit Verification**| `pip-audit` | ✅ Passed | `0` known vulnerability alerts on uv lock |
+| **Audit Verification**| `pip-audit` | ✅ Passed | `0` known vulnerability alerts on lock |
 
 ---
 
 ## Git Summary
 
-*   **Commit Message**: `feat(phase2): implement AI platform foundation`
-*   **Tag Version**: `v0.2.0-phase2`
+*   **Commit Message**: `feat(phase2.1): implement AI platform refinements`
+*   **Tag Version**: `v0.2.1-phase2.1`
 *   **GitHub Repository**: `https://github.com/Virajcreates/AgentSphere`
 *   **Push Status**: Successfully pushed master branch and tags
 
 ---
 
-## Quick Start (Phase 2 Validation)
+## Quick Start (Phase 2.1 Validation)
 
 To execute all tests and verify linting, type-checking, and coverage manually:
 ```bash
-# Install dependencies
-uv sync --all-groups
-
 # Verify Linting and Formatting
 .venv\Scripts\python -m ruff check src/
 
@@ -162,15 +156,15 @@ uv sync --all-groups
 
 ---
 
-## Known Limitations (Phase 2+)
+## Known Limitations
 
-*   **In-Memory Lifecycle**: Pre-seeded prompts, model registry parameters, and circuit-breaker metrics live in-memory. They reset on server restarts. Next phases will bind these structures to SQLAlchemy repositories and Redis backends.
-*   **Planners & Executors**: Planners and Executors are defined as mock adapters/placeholders conforming to typing Protocols. Connecting them to stateful graphs and integration layers is the target of Phase 3 and Phase 4.
+*   **In-Memory Lifecycle**: Pre-seeded prompts, compiled templates, model registry performance coefficients, provider metrics, quotas, lineage logs, and circuit-breaker states live in-memory. They reset on server restarts. Later phases will bind these structures to stateful SQLAlchemy repositories and Redis caches.
+*   **Planners & Executors**: Planners and Executors remain mock adapters/placeholders conforming to typing Protocols. Linking them to stateful graphs and multi-agent systems is the target of Phase 3 and Phase 4.
 
 ---
 
 ## Next Move Recommendation (Phase 3)
 
-With the complete AI Resiliency and Prompt platform fully implemented, the platform is optimally positioned to start **Phase 3 (Agent Execution & Memory Engine)**. The interfaces (`ConversationMemory`, `Planner`, and `Executor`) can be coupled with LangGraph orchestration graphs, PostgreSQL memory states, and Tool call executors with zero rewrite on the current architecture.
+With the complete AI Resiliency Gateway, Prompt Compiler, and dynamic Capability Negotiator fully implemented and passing all rigorous testing suites, the platform is optimally positioned to start **Phase 3 (Agent Execution & Memory Engine)**. The interfaces (`ConversationMemory`, `Planner`, and `Executor`) can be coupled with LangGraph orchestration graphs, PostgreSQL memory states, and Tool call executors with zero rewrite on the current architecture.
 
 **STOP. Do NOT begin Phase 3.**
