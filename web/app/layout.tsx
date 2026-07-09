@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import "./globals.css";
 import { ThemeProvider, useTheme } from "../components/ThemeProvider";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useNotificationStore } from "../stores/notification-store";
@@ -9,9 +10,13 @@ import { Typography, Card } from "../shared/design-system";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider>
-      <LayoutContent>{children}</LayoutContent>
-    </ThemeProvider>
+    <html lang="en">
+      <body>
+        <ThemeProvider>
+          <LayoutContent>{children}</LayoutContent>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }
 
