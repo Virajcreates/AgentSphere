@@ -40,9 +40,20 @@ from agentsphere.config.settings import Settings
 from agentsphere.infrastructure.auth.api_key_handler import APIKeyHandler
 from agentsphere.infrastructure.auth.jwt_handler import JWTHandler
 from agentsphere.infrastructure.auth.password_hasher import PasswordHasher
+from agentsphere.infrastructure.event_bus.in_memory_event_bus import InMemoryEventBus
 from agentsphere.infrastructure.persistence.repositories.api_key_repository import ApiKeyRepository
 from agentsphere.infrastructure.persistence.repositories.tenant_repository import TenantRepository
 from agentsphere.infrastructure.persistence.repositories.user_repository import UserRepository
+from agentsphere.runtime.agent.agent_runtime import AgentRuntime
+from agentsphere.runtime.checkpoint.in_memory_store import InMemoryCheckpointStore
+from agentsphere.runtime.conversation.conversation_manager import ConversationManager
+from agentsphere.runtime.executor.execution_engine import ExecutionEngine
+from agentsphere.runtime.memory.memory_manager import MemoryManager
+from agentsphere.runtime.planner.planner import RuntimePlanner
+from agentsphere.runtime.policies.policies import RuntimePolicyEvaluator
+from agentsphere.runtime.serialization.serializer import RuntimeSerializer
+from agentsphere.runtime.telemetry.tracker import RuntimeTracker
+from agentsphere.runtime.tools.tool_framework import ToolExecutor, ToolRegistry
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -186,11 +197,46 @@ class AIContainer(containers.DeclarativeContainer):
     )
 
 
+class RuntimeContainer(containers.DeclarativeContainer):
+    ai = providers.DependenciesContainer()
+
+    # Core event bus shared across components
+    event_bus = providers.Singleton(InMemoryEventBus)
+
+    # Core singletons
+    conversation_manager = providers.Singleton(ConversationManager, event_bus=event_bus)
+    planner = providers.Singleton(RuntimePlanner)
+    execution_engine = providers.Singleton(ExecutionEngine, event_bus=event_bus)
+    tool_registry = providers.Singleton(ToolRegistry)
+    tool_executor = providers.Singleton(ToolExecutor, registry=tool_registry, event_bus=event_bus)
+    memory_manager = providers.Singleton(MemoryManager, event_bus=event_bus)
+    policy_evaluator = providers.Singleton(RuntimePolicyEvaluator)
+    tracker = providers.Singleton(RuntimeTracker)
+    serializer = providers.Singleton(RuntimeSerializer)
+    checkpoint_store = providers.Singleton(InMemoryCheckpointStore)
+
+    # Core Agent Runtime Orchestrator
+    agent_runtime = providers.Singleton(
+        AgentRuntime,
+        event_bus=event_bus,
+        conversation_manager=conversation_manager,
+        planner=planner,
+        execution_engine=execution_engine,
+        tool_executor=tool_executor,
+        memory_manager=memory_manager,
+        policy_evaluator=policy_evaluator,
+        tracker=tracker,
+        serializer=serializer,
+        checkpoint_store=checkpoint_store,
+    )
+
+
 class ApplicationContainer(containers.DeclarativeContainer):
     core = providers.Container(CoreContainer)
     auth = providers.Container(AuthContainer, core=core)
     use_cases = providers.Container(UseCasesContainer, core=core, auth=auth)
     ai = providers.Container(AIContainer)
+    runtime = providers.Container(RuntimeContainer, ai=ai)
 
 
 _container: ApplicationContainer | None = None
