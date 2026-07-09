@@ -16,6 +16,7 @@ from agentsphere.ai.schemas.inference import (
     LLMCompletionResponse,
 )
 from agentsphere.ai.streaming.stream import AIStream
+from agentsphere.ai.telemetry.benchmarking import ProviderBenchmarkCollector
 from agentsphere.ai.telemetry.tracker import TelemetryTracker
 
 logger = structlog.get_logger(__name__)
@@ -31,12 +32,14 @@ class AIGateway:
         cost_tracker: CostTracker,
         llm_providers: dict[str, LLMProvider] | None = None,
         embedding_providers: dict[str, EmbeddingProvider] | None = None,
+        benchmark_collector: ProviderBenchmarkCollector | None = None,
     ) -> None:
         self.registry = model_registry
         self.circuit_breaker = circuit_breaker
         self.retry_policy = retry_policy
         self.telemetry = telemetry_tracker
         self.cost_tracker = cost_tracker
+        self.benchmark = benchmark_collector
 
         self._llm_providers = llm_providers or {}
         self._embedding_providers = embedding_providers or {}
@@ -81,6 +84,7 @@ class AIGateway:
 
         last_error = None
         for current_provider in providers_to_try:
+            retry_count = 0
             try:
                 # 1. Circuit Breaker Check
                 self.circuit_breaker.allow_request(current_provider)
@@ -89,13 +93,15 @@ class AIGateway:
                 adapter = self._get_llm_provider(current_provider)
 
                 # 3. Define the actual execution closure for retry policy
-                async def execute_call(a=adapter) -> LLMCompletionResponse:
+                async def execute_call(a: LLMProvider = adapter) -> LLMCompletionResponse:
                     return await a.complete(request)
 
                 # 4. Handle logging retry hooks
                 async def on_retry(
-                    exc: Exception, attempt: int, delay: float, prov=current_provider
+                    exc: Exception, attempt: int, delay: float, prov: str = current_provider
                 ) -> None:
+                    nonlocal retry_count
+                    retry_count += 1
                     logger.warn(
                         "Retrying AI complete request",
                         provider=prov,
@@ -129,7 +135,18 @@ class AIGateway:
                     current_provider, request.model, duration, True
                 )
 
-                # 8. Track Telemetry
+                # 8. Record Benchmarking Stats
+                if self.benchmark:
+                    self.benchmark.record_attempt(
+                        provider=current_provider,
+                        latency=duration,
+                        success=True,
+                        retries=retry_count,
+                        timed_out=False,
+                        cost=cost,
+                    )
+
+                # 9. Track Telemetry
                 self.telemetry.track_request(
                     provider=current_provider,
                     model=request.model,
@@ -152,6 +169,20 @@ class AIGateway:
                 with suppress(Exception):
                     self.registry.update_model_performance(
                         current_provider, request.model, 0.0, False
+                    )
+
+                # Record Benchmarking Failure
+                if self.benchmark:
+                    from agentsphere.ai.exceptions.base import ProviderTimeoutError
+
+                    timed_out = isinstance(e, ProviderTimeoutError)
+                    self.benchmark.record_attempt(
+                        provider=current_provider,
+                        latency=0.0,
+                        success=False,
+                        retries=retry_count,
+                        timed_out=timed_out,
+                        cost=0.0,
                     )
 
                 # Track failure telemetry
@@ -212,6 +243,16 @@ class AIGateway:
 
             self.registry.update_model_performance(provider, model, latency, True)
 
+            if self.benchmark:
+                self.benchmark.record_attempt(
+                    provider=provider,
+                    latency=latency,
+                    success=True,
+                    retries=0,
+                    timed_out=False,
+                    cost=stream_cost,
+                )
+
             self.telemetry.track_request(
                 provider=provider,
                 model=model,
@@ -255,6 +296,16 @@ class AIGateway:
             )
             response.usage.cost = cost
 
+            if self.benchmark:
+                self.benchmark.record_attempt(
+                    provider=provider_name,
+                    latency=duration,
+                    success=True,
+                    retries=0,
+                    timed_out=False,
+                    cost=cost,
+                )
+
             self.telemetry.track_request(
                 provider=provider_name,
                 model=request.model,
@@ -266,6 +317,19 @@ class AIGateway:
             return response
         except Exception as e:
             self.circuit_breaker.record_failure(provider_name)
+
+            if self.benchmark:
+                from agentsphere.ai.exceptions.base import ProviderTimeoutError
+
+                self.benchmark.record_attempt(
+                    provider=provider_name,
+                    latency=0.0,
+                    success=False,
+                    retries=0,
+                    timed_out=isinstance(e, ProviderTimeoutError),
+                    cost=0.0,
+                )
+
             self.telemetry.track_error(
                 provider=provider_name,
                 model=request.model,

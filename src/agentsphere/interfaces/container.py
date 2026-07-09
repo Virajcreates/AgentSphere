@@ -1,13 +1,17 @@
 from dependency_injector import containers, providers
 
 from agentsphere.ai.core.inference import AIInferenceService
+from agentsphere.ai.core.policy_engine import AIPolicyEngine
+from agentsphere.ai.core.semantic_cache import InMemorySemanticAICache
 from agentsphere.ai.cost.cost_tracker import CostTracker
+from agentsphere.ai.cost.quota_manager import QuotaManager
 from agentsphere.ai.executor.executor import MockExecutor
 from agentsphere.ai.gateway.ai_gateway import AIGateway
 from agentsphere.ai.gateway.circuit_breaker import CircuitBreaker
 from agentsphere.ai.gateway.retry_policy import RetryPolicy
 from agentsphere.ai.memory.memory import MockConversationMemory, MockMemoryStore
 from agentsphere.ai.planner.planner import MockPlanner
+from agentsphere.ai.prompts.prompt_compiler import PromptCompiler
 from agentsphere.ai.prompts.prompt_manager import PromptManager
 from agentsphere.ai.providers.anthropic import AnthropicProvider
 from agentsphere.ai.providers.azure_openai import AzureOpenAIProvider
@@ -17,7 +21,10 @@ from agentsphere.ai.providers.nvidia import NvidiaProvider
 from agentsphere.ai.providers.ollama import OllamaProvider
 from agentsphere.ai.providers.openai import OpenAIProvider
 from agentsphere.ai.providers.openrouter import OpenRouterProvider
+from agentsphere.ai.registry.capability_negotiator import CapabilityNegotiator
 from agentsphere.ai.registry.model_registry import ModelRegistry
+from agentsphere.ai.telemetry.benchmarking import ProviderBenchmarkCollector
+from agentsphere.ai.telemetry.lineage import PromptLineageTracker
 from agentsphere.ai.telemetry.tracker import TelemetryTracker
 from agentsphere.ai.tokenizer.token_counter import TokenCounter
 from agentsphere.application.use_cases.auth.create_api_key import CreateApiKeyUseCase
@@ -108,6 +115,17 @@ class AIContainer(containers.DeclarativeContainer):
     circuit_breaker = providers.Singleton(CircuitBreaker)
     retry_policy = providers.Singleton(RetryPolicy)
 
+    # Refinements Singletons
+    capability_negotiator = providers.Singleton(
+        CapabilityNegotiator, model_registry=model_registry
+    )
+    prompt_compiler = providers.Singleton(PromptCompiler, prompt_manager=prompt_manager)
+    policy_engine = providers.Singleton(AIPolicyEngine, model_registry=model_registry)
+    quota_manager = providers.Singleton(QuotaManager)
+    semantic_cache = providers.Singleton(InMemorySemanticAICache)
+    benchmark_collector = providers.Singleton(ProviderBenchmarkCollector)
+    lineage_tracker = providers.Singleton(PromptLineageTracker)
+
     # Providers (as factories)
     openai_provider = providers.Factory(OpenAIProvider)
     gemini_provider = providers.Factory(GeminiProvider)
@@ -149,6 +167,7 @@ class AIContainer(containers.DeclarativeContainer):
             ollama=ollama_provider,
             nvidia=nvidia_provider,
         ),
+        benchmark_collector=benchmark_collector,
     )
 
     # Inference Service
@@ -158,6 +177,12 @@ class AIContainer(containers.DeclarativeContainer):
         gateway=gateway,
         model_registry=model_registry,
         token_counter=token_counter,
+        prompt_compiler=prompt_compiler,
+        policy_engine=policy_engine,
+        quota_manager=quota_manager,
+        cache=semantic_cache,
+        lineage_tracker=lineage_tracker,
+        capability_negotiator=capability_negotiator,
     )
 
 
