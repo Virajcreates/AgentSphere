@@ -6,7 +6,7 @@ import { ThemeProvider, useTheme } from "../components/ThemeProvider";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useNotificationStore } from "../stores/notification-store";
 import { useCommandPaletteStore } from "../stores/command-palette-store";
-import { Typography, Card } from "../shared/design-system";
+import { Sidebar } from "../components/Sidebar";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,9 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const { toggleTheme, theme } = useTheme();
   const { isOpen, toggle, close } = useCommandPaletteStore();
-  const { notifications, markAsRead } = useNotificationStore();
+  const { notifications } = useNotificationStore();
 
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
@@ -63,68 +62,23 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const handleNav = (route: string) => {
     close();
     setSearchQuery("");
-    // In real App, router.push(route) is executed
-    window.location.hash = route;
-    if (route === "/") setActiveTab("dashboard");
-    else setActiveTab(route.replace("/", ""));
+    // Standard routing via direct hash navigations or router pushes
+    window.location.href = route;
   };
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar navigation panel */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-6 text-slate-400">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">
-              AS
-            </div>
-            <span className="font-extrabold text-white text-lg tracking-wider">AgentSphere</span>
-          </div>
-
-          <nav className="space-y-1.5">
-            {[
-              { id: "dashboard", label: "Dashboard", icon: "📊" },
-              { id: "agents", label: "Agents Manager", icon: "🤖" },
-              { id: "conversations", label: "Conversations", icon: "💬" },
-              { id: "knowledge", label: "Knowledge Bases", icon: "📚" },
-              { id: "prompts", label: "Prompt Studio", icon: "📝" },
-              { id: "playground", label: "Playground", icon: "🧪" },
-              { id: "analytics", label: "Telemetry", icon: "📈" },
-              { id: "settings", label: "Settings", icon: "⚙️" },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  window.location.hash = item.id === "dashboard" ? "/" : `/${item.id}`;
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  activeTab === item.id
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
-                    : "hover:bg-slate-800/50 hover:text-slate-200"
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="border-t border-slate-800 pt-4 text-xs">
-          <p className="font-semibold text-slate-500">Enterprise AI Ops Platform</p>
-          <p className="text-slate-600 mt-0.5">v0.5.0-phase5</p>
-        </div>
-      </aside>
+      {/* Redesigned standard SaaS-grade Sidebar */}
+      <Sidebar />
 
       {/* Main Administrative dashboard */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
         {/* Header container */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-8 z-10 shadow-sm">
-          <div className="flex items-center gap-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+        <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 flex items-center justify-between px-8 z-10 shadow-sm">
+          <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
             <span>AgentSphere</span>
             <span>/</span>
-            <span className="text-slate-900 dark:text-white capitalize">{activeTab}</span>
+            <span className="text-slate-900 dark:text-white">Active Console</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -158,8 +112,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Dynamic page target view panel */}
-        <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950 p-8">
+        {/* Dynamic page target view panel - NATIVE NESTING OF app/ PATH PAGES */}
+        <main className="flex-1 overflow-auto p-8">
           {children}
         </main>
       </div>
@@ -167,7 +121,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
       {/* Centralized Command Palette Popup (cmdk style) */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-4 border-b border-slate-200 dark:border-slate-800">
               <span className="text-slate-400">🔍</span>
               <input
@@ -197,7 +151,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
                     <button
                       key={i}
                       onClick={cmd.action}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-300 font-medium transition-colors"
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-300 font-medium transition-colors border border-transparent"
                     >
                       {cmd.label}
                     </button>
