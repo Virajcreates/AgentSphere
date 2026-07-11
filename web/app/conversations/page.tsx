@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, Typography, Table } from "../shared/design-system";
+import { Card, Typography, Table } from "../../shared/design-system";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { createConversation, getConversationHistory, addConversationMessage } from "../lib/api/conversations";
 

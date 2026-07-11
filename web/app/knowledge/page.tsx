@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, Typography, Table, FormField, Dialog } from "../shared/design-system";
+import { Card, Typography, Table, FormField, Dialog } from "../../shared/design-system";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { createKnowledgeBase, queryKnowledgeBase } from "../lib/api/knowledge";
 

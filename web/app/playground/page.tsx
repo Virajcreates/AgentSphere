@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, Typography, FormField } from "../shared/design-system";
+import { Card, Typography, FormField } from "../../shared/design-system";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 export default function PlaygroundPage() {

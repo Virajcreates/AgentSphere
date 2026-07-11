@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, Typography, FormField } from "../shared/design-system";
+import { Card, Typography, FormField } from "../../shared/design-system";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 type SettingsModule = "general" | "providers" | "security" | "runtime" | "knowledge" | "api_keys" | "appearance" | "tenants";
