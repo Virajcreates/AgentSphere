@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Card, Typography, FormField } from "../../shared/design-system";
-import { ErrorBoundary } from "../components/ErrorBoundary";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 
 export default function PromptStudioPage() {
   const [templateText, setTemplateText] = useState(
